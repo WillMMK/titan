@@ -1,3 +1,9 @@
+# GrantAxis
+
+SPDX-License-Identifier: Apache-2.0
+
+GrantAxis is a SaaS solution that leverages Titan's Snowflake-IaC engine to eliminate access-right drift in Snowflake environments.
+
 # `titan core` - Snowflake infrastructure as code
 
 Titan Core helps you provision, deploy, and secure resources in Snowflake. It replaces tools like Terraform, Schemachange, or Permifrost.
