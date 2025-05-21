@@ -8,6 +8,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build Docker image
-        run: docker build -f services/titan-worker/Dockerfile.titan-worker -t titan-worker-test services/titan-worker
+        run: docker build -f services/titan-worker/Dockerfile.titan-worker -t titan-worker-test .
       - name: Run DRY_RUN test
         run: docker run --rm -e DRY_RUN=1 titan-worker-test 
