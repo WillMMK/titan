@@ -32,7 +32,7 @@ COPY --from=build /usr/local/lib/python3.12/site-packages /usr/local/lib/python3
 COPY --from=build /usr/local/bin/titan /usr/local/bin/titan
 
 # Copy runner script (to be created)
-COPY runner.sh /runner.sh
+COPY services/titan-worker/runner.sh /runner.sh
 RUN chmod +x /runner.sh
 
 USER workeruser
