@@ -42,7 +42,7 @@ main_job() {
 }
 
 # Run with timeout (8 min = 480s)
-if ! timeout 480 bash -c main_job; then
+if ! timeout 480 bash -c "$(declare -f main_job); main_job"; then
     echo "Job timed out after 8 minutes." >&2
     exit 124
 fi 
