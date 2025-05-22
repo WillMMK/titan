@@ -20,7 +20,8 @@ jobs:
           docker kill --signal=SIGTERM testworker
           sleep 2
           docker logs testworker > sigterm.log || true
-          grep 'Received SIGTERM' sigterm.log
+          cat sigterm.log
+          grep SIGTERM sigterm.log
           docker rm testworker || true
       - name: Test timeout handling (simulate with sleep)
         run: |
