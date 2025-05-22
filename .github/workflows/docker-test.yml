@@ -25,6 +25,6 @@ jobs:
           docker rm testworker || true
       - name: Test timeout handling (simulate with sleep)
         run: |
-          echo '#!/bin/bash\nsleep 500' > fake_runner.sh
+          echo -e '#!/bin/bash\nsleep 500' > fake_runner.sh
           chmod +x fake_runner.sh
           docker run --rm -v $(pwd)/fake_runner.sh:/runner.sh:ro -e DRY_RUN=0 titan-worker-test || test $? -eq 124 
