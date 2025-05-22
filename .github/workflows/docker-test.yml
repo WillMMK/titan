@@ -15,7 +15,7 @@ jobs:
           grep '"level":"info"' output.log
       - name: Test SIGTERM handling
         run: |
-          docker run --name testworker -d -e DRY_RUN=1 -e S3_BUCKET=test-bucket -e JOB_ID=test-job titan-worker-test
+          docker run --name testworker -d -e DRY_RUN=1 -e TEST_SIGTERM=1 -e S3_BUCKET=test-bucket -e JOB_ID=test-job titan-worker-test
           sleep 2
           docker kill --signal=SIGTERM testworker
           sleep 2

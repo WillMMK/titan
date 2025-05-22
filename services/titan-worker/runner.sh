@@ -26,6 +26,10 @@ main_job() {
     if [ "$DRY_RUN" = "1" ]; then
         echo "{\"level\":\"info\",\"msg\":\"[DRY_RUN] Would run: titan export, titan plan, upload plan.json to S3.\"}"
         echo "{\"level\":\"info\",\"msg\":\"[DRY_RUN] S3 URL: s3://$S3_BUCKET/$JOB_ID/plan.json\"}"
+        if [ "${TEST_SIGTERM:-0}" = "1" ]; then
+            echo "{\"level\":\"info\",\"msg\":\"[DRY_RUN] Sleeping for SIGTERM test...\"}"
+            sleep 15
+        fi
         exit 0
     fi
 
