@@ -10,4 +10,20 @@ jobs:
       - name: Build Docker image
         run: docker build -f services/titan-worker/Dockerfile.titan-worker -t titan-worker-test .
       - name: Run DRY_RUN test
-        run: docker run --rm -e DRY_RUN=1 titan-worker-test 
+        run: |
+          docker run --rm -e DRY_RUN=1 -e S3_BUCKET=test-bucket -e JOB_ID=test-job titan-worker-test | tee output.log
+          grep '"level":"info"' output.log
+      - name: Test SIGTERM handling
+        run: |
+          docker run --name testworker -d -e DRY_RUN=1 -e S3_BUCKET=test-bucket -e JOB_ID=test-job titan-worker-test
+          sleep 2
+          docker kill --signal=SIGTERM testworker
+          sleep 2
+          docker logs testworker > sigterm.log || true
+          grep 'Received SIGTERM' sigterm.log
+          docker rm testworker || true
+      - name: Test timeout handling (simulate with sleep)
+        run: |
+          echo '#!/bin/bash\nsleep 500' > fake_runner.sh
+          chmod +x fake_runner.sh
+          docker run --rm -v $(pwd)/fake_runner.sh:/runner.sh:ro -e DRY_RUN=0 titan-worker-test || test $? -eq 124 

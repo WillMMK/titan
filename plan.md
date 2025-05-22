@@ -104,7 +104,9 @@ grantaxis/
 ## Implementation Phases
 
 ### Phase 1: Core Infrastructure (Months 1-2)
-- [ ] Set up Titan Core integration
+- [x] Set up Titan Core integration
+- [x] Implement titan-worker Docker container
+- [x] Add GitHub Actions workflow for Docker build/test automation
 - [ ] Implement basic drift scanner
 - [ ] Create initial auto-revoke engine
 - [ ] Establish basic alerting system
@@ -134,6 +136,7 @@ grantaxis/
 - Python 3.8+
 - Titan Core latest version
 - Containerized deployment (Docker)
+- **CI/CD pipeline (GitHub Actions) for automated Docker build and test**
 
 ### Dependencies
 - FastAPI

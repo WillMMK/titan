@@ -30,9 +30,11 @@ This sprint focuses on implementing the core "Run Free Scan" functionality of Gr
 | 1.1 | Write `Dockerfile.titan-worker` multi-stage build (python:3.12-slim)                                                             | ✅ Image builds locally                |
 | 1.2 | Install Titan CLI inside container: `pip install -e third_party/titan_core`                                                      | ✅ `titan --help` runs in container    |
 | 1.3 | Add tini & non-root user; set ENTRYPOINT `/runner.sh`                                                                            | ✅ Security baseline                   |
-| 1.4 | Create `/runner.sh` that: <br>• pulls job env vars <br>• clones S3 creds file <br>• runs titan export → plan → uploads plan.json | ✅ Script exits 0 with right S3 URL echo |
-| 1.5 | Unit test container via `docker run -e DRY_RUN=1` to ensure dependencies only 200 MB                                             |                                        |
-| 1.6 | Implement timeout handling (8 min max runtime)                                                                                   | ✅ Worker aborts gracefully            |
+| 1.4 | Create `/runner.sh` that: <br>• pulls job env vars <br>• injects AWS credentials via `AWS_WEB_IDENTITY_TOKEN_FILE` or secrets-manager env injection (no file copies) <br>• runs titan export → plan → uploads plan.json |                                 |
+| 1.5 | Unit test container via `docker run -e DRY_RUN=1` to ensure dependencies only 200 MB                                             |                                 |
+| 1.6 | Implement timeout handling (8 min max runtime)                                                                                   |                                 |
+| 1.7 | Stream logs to stdout as JSON for CloudWatch aggregation                                                                        |                                 |
+| 1.8 | Unit test SIGTERM handling — ensure pod exits 137, not hung                                                                     |                                 |
 
 ---
 
@@ -40,15 +42,18 @@ This sprint focuses on implementing the core "Run Free Scan" functionality of Gr
 
 | #   | Task                                                                                                                          | Output                       |
 | --- | ----------------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
-| 2.1 | Scaffold FastAPI project `apps/api` with Poetry                                                                               | `uvicorn main:app` works     |
-| 2.2 | Implement `/healthz` GET returning `200 OK`                                                                                   | Endpoint live                |
-| 2.3 | Define DB schema in Alembic: `scan_jobs` table (id, tenant_id, status, baseline_url, plan_url, summary_json, created_at)      | Migration script committed   |
-| 2.4 | Add PostgreSQL service in `docker-compose.yml` with volume                                                                    | `psql` connects              |
-| 2.5 | Implement POST `/scans` that inserts row (status=PENDING) and pushes message to RabbitMQ `scan_queue`                         | Returns job_id               |
-| 2.6 | Implement GET `/scans/{id}` returning row JSON                                                                                | Endpoint tested              |
-| 2.7 | Add `MessagePublisher` util wrapping pika; publish `job_id`                                                                   | Unit test sends message      |
-| 2.8 | Docker-compose service `titand` that consumes `scan_queue`, runs titan-worker container via `docker run --rm`                 | Message round-trip validated |
-| 2.9 | Webhook endpoint `/internal/scan_done` that updates row with S3 URLs & summary                                                | E2E test complete            |
+| 2.1 | Scaffold FastAPI project `apps/api` with Poetry <br>• Pin FastAPI + Uvicorn versions to avoid 0.110 breaking change             |                                 |
+| 2.2 | Implement `/healthz` GET returning `200 OK`                                                                                   |                                 |
+| 2.3 | Define DB schema in Alembic: `scan_jobs` table (id, tenant_id, status, baseline_url, plan_url, summary_json, created_at) <br>• Include `tenant_id → UNIQUE` index      |                                 |
+| 2.4 | Add PostgreSQL service in `docker-compose.yml` with volume <br>• `docker compose up` starts and `psql` connects                |                                 |
+| 2.5 | Implement POST `/scans` that inserts row (status=PENDING) and pushes message to RabbitMQ `scan_queue` <br>• Validation schema (Pydantic) <br>• Generate presigned S3 URL for policy upload if CSV large <br>• Return `job_id` + `upload_url` |                                 |
+| 2.6 | Implement GET `/scans/{id}` returning row JSON <br>• Add pagination stub for future `/scans?tenant=` list                      |                                 |
+| 2.7 | Add `MessagePublisher` util wrapping pika; publish `job_id` <br>• Unit test publishes and consumes in mocked RabbitMQ           |                                 |
+| 2.8.1 | Write compose service & network                                                                                              |                                 |
+| 2.8.2 | Write consumer script that shells out                                                                                         |                                 |
+| 2.8.3 | Integration test end-to-end                                                                                                  |                                 |
+| 2.8.4 | Make explicit: compose file maps docker socket OR uses Docker-in-Docker                                                      |                                 |
+| 2.9 | Webhook endpoint `/internal/scan_done` that updates row with S3 URLs & summary <br>• Verify HMAC token to block spoofed calls  |                                 |
 
 ---
 
@@ -58,11 +63,11 @@ This sprint focuses on implementing the core "Run Free Scan" functionality of Gr
 | --- | ---------------------------------------------------------------------------------------------------------------- | --------------------------------- |
 | 3.1 | Draft JSON schema `policy.schema.json` with `objects[]`, `roles[]`, enum validation                              | Stored in `apps/api/schemas`      |
 | 3.2 | Implement `BaseAdapter` class with `fetch_policy()` abstractmethod                                               | Unit tests pass                   |
-| 3.3 | **TagsAdapter**: queries ACCOUNT_USAGE.TAG_REFERENCES via Snowflake connector mock; returns policy JSON          | Integration test with fixture CSV |
+| 3.3 | **TagsAdapter**: queries ACCOUNT_USAGE.TAG_REFERENCES via Snowflake connector mock; returns policy JSON <br>• Add real integration test later |                                 |
 | 3.4 | **ConventionAdapter**: regex derive security level from role names; param `regex` defaults to `PRD_…_(TRUSTED\|RESTRICTED)` | Unit tests 5 cases |
 | 3.5 | **CsvAdapter**: parse user-supplied CSV into policy JSON; raises on bad headers                                  | CSV fixture test                  |
 | 3.6 | Write adapter auto-detector: tries tags → convention; if fail returns `None`                                     | Tested with tagless dataset       |
-| 3.7 | Serialize policy JSON to `policy.yaml` (Titan's expected format) using `ruamel.yaml`                             | File diff verified                |
+| 3.7 | Serialize policy JSON to `policy.yaml` (Titan's expected format) using `ruamel.yaml` <br>• Unit test invalid char escaping    |                                 |
 
 ---
 
@@ -71,11 +76,11 @@ This sprint focuses on implementing the core "Run Free Scan" functionality of Gr
 | #   | Task                                                                          | Output              |
 | --- | ----------------------------------------------------------------------------- | ------------------- |
 | 4.1 | Scaffold `grantaxis-cli` with Typer                                           | `grantaxis --help`  |
-| 4.2 | Implement `scan` command: collects args, zips credentials, hits POST `/scans` | Returns job_id      |
+| 4.2 | Implement `scan` command: collects args, zips credentials, encrypts ZIP with `fernet` before POST, hits POST `/scans`         |                                 |
 | 4.3 | Poll `/scans/{id}` every 5 s until status ≠ PENDING                           | Progress bar prints |
 | 4.4 | On completion: download plan.json S3 link, pretty-print summary table         | Rendered            |
 | 4.5 | `--local` flag: run adapters and diff locally without API (mock Titan)        | Offline test        |
-| 4.6 | Publish CLI to TestPyPI; pin SHA256 in docs                                   | Install succeeds    |
+| 4.6 | Publish CLI to TestPyPI; pin SHA256 in docs <br>• Version bump CI action                                                      |                                 |
 
 ---
 
@@ -84,8 +89,8 @@ This sprint focuses on implementing the core "Run Free Scan" functionality of Gr
 | #   | Task                                                                | Output                     |
 | --- | ------------------------------------------------------------------- | -------------------------- |
 | 5.1 | Create Jinja2 template `report.html` with table + severity heat bar | Template renders           |
-| 5.2 | Use WeasyPrint to convert HTML → PDF inside API worker              | PDF ≤300 KB                |
-| 5.3 | Store PDF in S3 `s3://reports/{tenant}/{scan_id}.pdf`               | Public-signed URL (7 days) |
+| 5.2 | Use WeasyPrint to convert HTML → PDF inside API worker <br>• If system deps (pango, cairo) are too large, use separate lightweight reporter container or switch to pdfkit + wkhtmltopdf-alpine |                                 |
+| 5.3 | Store PDF in S3 `s3://reports/{tenant}/yyyy/mm/{scan_id}.pdf`                                                                  |                                 |
 | 5.4 | Update webhook to include `report_url` in DB                        | Field populated            |
 | 5.5 | CLI: if `--pdf` flag, auto-open link post scan (macOS `open`)       | Works on test Mac          |
 | 5.6 | Landing page dashboard link to PDF for completed scans              | Link visible               |
@@ -102,6 +107,7 @@ This sprint focuses on implementing the core "Run Free Scan" functionality of Gr
 | 6.4 | Capture `scan_started` event via PostHog from click on copy button                             | Event shows in dashboard |
 | 6.5 | Success modal that polls `/scans/{id}` via SSE and confetti when status=COMPLETED              | Works local              |
 | 6.6 | 404 page for invalid job_id                                                                   | Tested                   |
+| 6.7 | Accessibility check (axe-core) as lint step                                                                                   |                                 |
 
 ---
 
@@ -116,6 +122,7 @@ This sprint focuses on implementing the core "Run Free Scan" functionality of Gr
 | 7.5 | Survey feedback form (Google Forms) auto-sent after PDF download          | Response received |
 | 7.6 | Fix any P0 bug within 24 h SLA                                            | Hotfix git tags   |
 | 7.7 | Prepare KPI doc: job success %, avg runtime, PDF generation errors        | Shared PDF        |
+| 7.8 | Post-mortem template & retro meeting to lock learnings                                                                        |                                 |
 
 ---
 
@@ -127,3 +134,10 @@ This sprint focuses on implementing the core "Run Free Scan" functionality of Gr
 * Landing page conversions tracked
 
 No feature creep; any item not listed is a *post-sprint* backlog. 
+
+## **Cross-Cutting Items**
+
+1. **Auth / Multi-tenancy guard** — Specify JWT or magic-link auth for API before exposing endpoints.
+2. **Rate-limiting** — Basic `slowapi` decorator on `/scans`.
+3. **Secrets rotation** — Task to test Snowflake key rotation path.
+4. **Telemetry** — Simple middleware to log request latency. 
